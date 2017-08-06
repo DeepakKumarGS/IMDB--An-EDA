@@ -1,0 +1,194 @@
+---
+title: "IMDB Movie Database Analysis"
+author: "Deepak Kumar"
+date: "`r Sys.Date()`"
+output: 
+    html_document:
+    fig_width: 10
+    fig_height: 7
+    toc: yes
+    number_sections: yes
+    code_folding: show
+    
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Loading required libraries
+
+
+```{r}
+setwd("C:/Users/Deepak kumar/Downloads")
+library(ggplot2)
+library(dplyr)
+library(plotly)
+library(formattable)
+library(ggcorrplot)
+library(wordcloud)
+library(stringr)
+```
+
+#Loading the data
+
+```{r}
+movie=read.csv("movie_metadata.csv",stringsAsFactors = FALSE,header=TRUE)
+glimpse(movie)
+summary(movie)
+```
+
+#Data Cleaning 
+
+##Remove unnecessary columns 
+I feel that color,plotkeywords,imdb link,facenumber in poster,aspect ratio to be unncessary for our visualisation analysis.They might be used for ML .But the kernel primary purpose is to analyse the data.
+```{r}
+movie$color=NULL
+movie$facenumber_in_poster=NULL
+movie$plot_keywords=NULL
+movie$aspect_ratio=NULL
+movie$movie_imdb_link=NULL
+names(movie)
+```
+
+
+###Rename the column names 
+since the column names have _ in them let us rename them,
+
+```{r}
+name=c("dirname","noofcrit","duration","dirfblike","act3fblik","act2name","act1fblik","gross","genre","hero","title","voteuser","castvotefb","act3name","userrev","lang","country","contentrating","budget","titleyr","act2fblik","imdbscore","moviefblik")
+colnames(movie)=name
+names(movie)
+```
+
+#Maximum movie made by director
+
+```{r}
+length(unique(movie$dirname))
+r=movie %>%filter(!(is.na(movie$dirname)| movie$dirname=="")) %>% group_by(dirname) %>% summarise(count=n()) %>% arrange(desc(count)) %>% top_n(20) %>% ggplot(aes(dirname,count,fill=dirname))+geom_bar(stat="identity")+theme(legend.position="None",axis.text.x = element_text(angle=90,vjust=0.3))+labs(x="DirName",y="Count")+ggtitle("Director With Maximum Titles")
+ggplotly(r)
+```
+
+
+#Which director has highest average gross ? 
+
+```{r}
+temp=movie %>% select(dirname,gross) 
+temp=temp %>% group_by(dirname) %>% summarise(avg=mean(gross))
+temp=temp %>% arrange(desc(avg))
+temp=na.omit(temp)
+temp=temp[1:20,]
+temp %>% formattable(list(avg=color_bar("red"),align='2'))
+```
+
+#Which is the movie with all time higest gross:
+
+```{r}
+temp=movie %>% select(title,gross)
+temp=temp %>% arrange(desc(gross))
+temp=na.omit(temp)
+temp=temp[1:20,]
+ggplot(temp,aes(title,gross,fill=title))+geom_bar(stat="identity")+theme(axis.text.x = element_text(angle=90,vjust = 0.5),legend.position="None")+labs(x="Title",y="Gross")+ggtitle("All time highest grossing movie")
+
+```
+
+#Which year had maximum releases ?
+
+```{r}
+temp=movie %>% select(titleyr,title)
+temp =temp %>% group_by(titleyr) %>% summarise(count=n_distinct(title))
+temp=na.omit(temp)
+temp %>% ggplot(aes(titleyr,count,size=count))+geom_point(alpha=0.5,aes(color="red"))+theme(axis.text.x = element_text(angle=90,vjust=0.5),legend.position="None")+labs(x="Year",y="Count")+ggtitle("Year with Max Releases")+scale_x_continuous(breaks=seq(1916,2017,10))
+```
+
+#Which movie hax max voters and max critical reviews ?
+
+```{r}
+length(unique(movie$title))
+temp=movie %>% select(title,noofcrit,voteuser)
+temp = temp %>% arrange(desc(temp$voteuser))
+temp=temp[1:20,]
+temp=na.omit(temp)
+p=ggplot(temp,aes(voteuser,noofcrit))+geom_point(aes(color=title))+theme(axis.text.x = element_text(angle=90),legend.position="none")+labs(x="UserVote",y="NoofCriticsReview")+ggtitle("No of  User Vote Vs Critics Review")
+ggplotly(p)
+```
+
+As evident,Django Unchained has got maximum critics review where as user vote is in the minimum side.Shawshank Redemption has got maximum user reviews whereas critics review has been less.
+
+#What is the content has got maximum user reviews over the year?
+
+```{r}
+temp=movie %>% select(userrev,contentrating,titleyr)
+temp=temp %>% group_by(titleyr,contentrating) %>% summarise(avgrev=mean(userrev))
+temp=temp %>% arrange(desc(titleyr)) 
+temp=na.omit(temp)
+q=ggplot(temp,aes(titleyr,avgrev,fill=contentrating))+geom_bar(stat="identity")+theme(axis.text.x = element_text(angle=90),legend.position="bottom")+labs(x="Year",y="Content Review")+ggtitle("Content rating each year")+scale_x_continuous(breaks =seq(1916,2017,2))
+ggplotly(q)
+```
+
+PG has been the top contender year on year generating maximum user reviews most of the time.
+
+#Correlation of IMDB Score Vs User review,FB Likes,Critics review,User Vote,Cast vote in FB,budget,gross,FB Likes of a movie 
+
+Let us understand the correlation of the following factors with help of ggcorrplot.
+
+```{r}
+temp = movie %>% select(imdbscore,dirfblike,act1fblik,gross,voteuser,castvotefb,budget,moviefblik,noofcrit)
+temp=na.omit(temp)
+corr=round(cor(temp),1)
+ggcorrplot(corr,hc.order=TRUE,type="lower",lab=TRUE,lab_size=4,method="circle",colors=c("red","green","blue","pink","white"),title="Correlogram of Movie Database",ggtheme=theme_dark)
+```
+
+
+Intersting insights drawn from this correlogram are :
+1.No of votes for the cast in FB has strong positive correlation with actor1fb link with correlation coeficient of 0.9.This means that people tend to like the movie if they have aversion towards actor.The causation needs to be analysed and proved.
+2.IMDB Scores have partial correlation with no of user votes.The correlation coefficient is 0.5
+3.No of user votes has positive correlation with gross revenue.This means that people go for a movie which has got max votes.This is a natural tendency.
+4.Number of critics review and movies FB likes has positive correlation with each other.
+
+
+
+#How do the IMDB Scores vary by category??
+
+```{r}
+temp=movie %>% select(contentrating,imdbscore)
+temp=na.omit(temp)
+plot_ly(temp,x= ~temp$imdbscore,y=~temp$contentrating,type="box",color=temp$contentrating)
+```
+
+We see that R has maximum outliers.The data seems to be skewed towards left.PG13 has also got similar skewness.
+
+
+#Social Media Sensations:
+Let us see which actor,director and movie has maximum likes in  the social media.
+
+##Director:
+
+
+```{r}
+temp=movie %>% select(dirname,dirfblike) %>% distinct()
+temp=na.omit(temp)
+temp =temp %>% arrange(desc(dirfblike))
+wordcloud(words=str_sub(temp$dirname,1,20),freq=temp$dirfblike,max.words=1000,min.freq=7000,scale=c(1,0.01),random.order=FALSE,rot.per=0.35,colors=rainbow(12))
+```
+
+
+##Hero:
+
+```{r}
+temp=movie %>% select(hero,act1fblik) %>% distinct()
+temp=na.omit(temp)
+temp =temp %>% arrange(desc(act1fblik))
+wordcloud(words=str_sub(temp$hero,1,20),freq=temp$act1fblik,max.words=100,min.freq=7000,scale=c(3,0.01),random.order=FALSE,rot.per=0.35,colors=rainbow(12))
+```
+
+
+
+##Movie:
+
+```{r}
+temp=movie %>% select(title,moviefblik) %>% distinct()
+temp=na.omit(temp)
+temp =temp %>% arrange(desc(moviefblik))
+wordcloud(words=str_sub(temp$title,1,30),freq=temp$moviefblik,max.words=50,min.freq=7000,scale=c(2,0.01),random.order=FALSE,rot.per=0.35,colors=brewer.pal(8,"Dark2"))
+```
