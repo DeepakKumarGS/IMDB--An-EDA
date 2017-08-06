@@ -20,7 +20,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 ```{r}
-setwd("C:/Users/Deepak kumar/Downloads")
+
 library(ggplot2)
 library(dplyr)
 library(plotly)
